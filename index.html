@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DOCX to LaTeX Converter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #0f1117;
+      --bg-secondary: #1a1d27;
+      --bg-tertiary: #242736;
+      --bg-card: #1e2130;
+      --border: #2e3247;
+      --border-hover: #4a4f6a;
+      --text-primary: #e4e6f0;
+      --text-secondary: #9498b3;
+      --text-muted: #6b6f8a;
+      --accent: #7c6aef;
+      --accent-hover: #9585f5;
+      --accent-dim: rgba(124, 106, 239, 0.12);
+      --success: #34d399;
+      --success-dim: rgba(52, 211, 153, 0.12);
+      --error: #f87171;
+      --error-dim: rgba(248, 113, 113, 0.12);
+      --radius: 10px;
+      --radius-sm: 6px;
+      --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), #a78bfa, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      color: var(--text-secondary);
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: var(--bg-secondary);
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .drop-zone .icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.6;
+    }
+
+    .drop-zone .label {
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .drop-zone .sublabel {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 0.35rem;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .config-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .config-group {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+
+    .config-group h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .config-group label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.3rem 0;
+    }
+
+    .config-group label:hover {
+      color: var(--text-primary);
+    }
+
+    .config-group input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+    }
+
+    .config-group input[type="text"],
+    .config-group select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      margin-top: 0.35rem;
+      font-family: var(--font-sans);
+    }
+
+    .config-group input[type="text"]:focus,
+    .config-group select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1.5rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: var(--font-sans);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card);
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .status-bar {
+      margin-top: 1.5rem;
+      padding: 0.85rem 1.25rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      display: none;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .status-bar.info {
+      display: flex;
+      background: var(--accent-dim);
+      border: 1px solid rgba(124, 106, 239, 0.25);
+      color: var(--accent-hover);
+    }
+
+    .status-bar.success {
+      display: flex;
+      background: var(--success-dim);
+      border: 1px solid rgba(52, 211, 153, 0.25);
+      color: var(--success);
+    }
+
+    .status-bar.error {
+      display: flex;
+      background: var(--error-dim);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      color: var(--error);
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .results {
+      margin-top: 2rem;
+      display: none;
+    }
+
+    .results.visible {
+      display: block;
+    }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .results-header h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .stats {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat .num {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat .lbl {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      margin-bottom: 1rem;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 0.6rem 1rem;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+      font-family: var(--font-sans);
+    }
+
+    .tab-btn.active {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .code-preview {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .code-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 1rem;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-preview-header span {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .code-preview pre {
+      padding: 1rem;
+      overflow-x: auto;
+      max-height: 500px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      tab-size: 2;
+      white-space: pre;
+    }
+
+    .toc-tree {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+
+    .toc-entry {
+      padding: 0.3rem 0;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+
+    .toc-entry .sec-num {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      min-width: 3rem;
+    }
+
+    .toc-entry.level-0 {
+      padding-left: 0;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .toc-entry.level-1 {
+      padding-left: 1.5rem;
+    }
+
+    .toc-entry.level-2 {
+      padding-left: 3rem;
+      font-size: 0.85rem;
+    }
+
+    .toc-entry.level-3 {
+      padding-left: 4.5rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .image-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .image-card img {
+      width: 100%;
+      height: 160px;
+      object-fit: contain;
+      background: #fff;
+      padding: 0.5rem;
+    }
+
+    .image-card .image-info {
+      padding: 0.6rem 0.8rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      border-top: 1px solid var(--border);
+    }
+
+    .image-card .image-info .caption-text {
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-style: italic;
+      margin-top: 0.25rem;
+    }
+
+    @media (max-width: 640px) {
+      .app {
+        padding: 1rem;
+      }
+
+      header h1 {
+        font-size: 1.5rem;
+      }
+
+      .config-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <h1>DOCX → LaTeX Converter</h1>
+      <p>Upload a Word document to extract headings, images, and tables into a LaTeX project</p>
+    </header>
+
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">📄</div>
+      <div class="label">Drop your .docx file here or click to browse</div>
+      <div class="sublabel">Supports .docx files with headings, images, and tables</div>
+      <input type="file" id="fileInput" accept=".docx" />
+    </div>
+
+    <div class="config-panel">
+      <div class="config-group">
+        <h3>Extraction Options</h3>
+        <label><input type="checkbox" id="optImages" checked /> Extract images</label>
+        <label><input type="checkbox" id="optTables" checked /> Extract tables</label>
+        <label><input type="checkbox" id="optText" checked /> Include body text</label>
+        <label><input type="checkbox" id="optFmt" checked /> Preserve bold / italic / underline</label>
+        <label><input type="checkbox" id="optStripNums" checked /> Strip leading numbers from headings</label>
+        <label><input type="checkbox" id="optCodeDetect" checked /> Detect JSON/Code blocks</label>
+      </div>
+      <div class="config-group">
+        <h3>LaTeX Template</h3>
+        <label for="cfgTitle">Document Title</label>
+        <input type="text" id="cfgTitle" placeholder="Comparison between Docling and AzureDocIntelligence" />
+        <label for="cfgSub" style="margin-top:0.5rem">Subtitle</label>
+        <input type="text" id="cfgSub" placeholder="Direct impact on Digitization and Authoring outputs" />
+        <label for="cfgAuthor" style="margin-top:0.5rem">Author / Organization</label>
+        <input type="text" id="cfgAuthor" placeholder="ZS Associates with Alexion" />
+        <label for="cfgProject" style="margin-top:0.5rem">Project Name</label>
+        <input type="text" id="cfgProject" value="Scriptiva 2.0 - Content Authoring Tool" />
+      </div>
+      <div class="config-group">
+        <h3>Output Settings</h3>
+        <label for="cfgImgW">Image width</label>
+        <select id="cfgImgW">
+          <option value="0.95">0.95\textwidth (default)</option>
+          <option value="0.8">0.8\textwidth</option>
+          <option value="0.6">0.6\textwidth</option>
+          <option value="0.5">0.5\textwidth</option>
+        </select>
+        <label for="cfgImgDir" style="margin-top:0.5rem">Images folder name</label>
+        <input type="text" id="cfgImgDir" value="images" placeholder="images" />
+        <label for="cfgImgPrefix" style="margin-top:0.5rem">File prefix (e.g. fig)</label>
+        <input type="text" id="cfgImgPrefix" value="fig" placeholder="fig" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="convertBtn" disabled>Convert to LaTeX</button>
+      <button class="btn btn-secondary" id="downloadZipBtn" style="display:none">⬇ Download ZIP</button>
+      <button class="btn btn-secondary" id="downloadIndivBtn" style="display:none">⬇ Download Files Separately</button>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+      <div class="spinner" id="statusSpinner"></div>
+      <span id="statusText"></span>
+    </div>
+
+    <div class="results" id="results">
+      <div class="results-header">
+        <h2>Extraction Results</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="num" id="sH">0</div>
+            <div class="lbl">Headings</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="sI">0</div>
+            <div class="lbl">Images</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="sT">0</div>
+            <div class="lbl">Tables</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="sP">0</div>
+            <div class="lbl">Paragraphs</div>
+          </div>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="tLatex">LaTeX Output</button>
+        <button class="tab-btn" data-tab="tToc">Table of Contents</button>
+        <button class="tab-btn" data-tab="tImg">Images</button>
+        <button class="tab-btn" data-tab="tLog">Parse Log</button>
+      </div>
+      <div class="tab-content active" id="tLatex">
+        <div class="code-preview">
+          <div class="code-preview-header"><span>main.tex</span><button class="btn btn-secondary"
+              style="padding:0.3rem 0.8rem;font-size:0.78rem" id="copyBtn">Copy</button></div>
+          <pre id="latexOut"></pre>
+        </div>
+      </div>
+      <div class="tab-content" id="tToc">
+        <div class="toc-tree" id="tocTree"></div>
+      </div>
+      <div class="tab-content" id="tImg">
+        <div class="image-grid" id="imgGrid"></div>
+      </div>
+      <div class="tab-content" id="tLog">
+        <div class="code-preview">
+          <div class="code-preview-header"><span>parse.log</span></div>
+          <pre id="logOut"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================================================================
+    // DOCX TO LATEX CONVERTER — Improved Template Formatting
+    // ================================================================
+
+    let loadedFile = null;
+    let generatedZip = null;
+    let currentLatex = "";
+    let currentImages = [];
+    const LOG = [];
+    const addLog = (m) => LOG.push(`[${new Date().toISOString().slice(11, 23)}] ${m}`);
+
+    // --- UI Wiring ---
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const convertBtn = document.getElementById('convertBtn');
+    const downloadZipBtn = document.getElementById('downloadZipBtn');
+    const downloadIndivBtn = document.getElementById('downloadIndivBtn');
+    const statusBar = document.getElementById('statusBar');
+    const statusText = document.getElementById('statusText');
+    const statusSpinner = document.getElementById('statusSpinner');
+    const resultsDiv = document.getElementById('results');
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+    fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+    function handleFile(file) {
+      if (!file.name.toLowerCase().endsWith('.docx')) { setStatus('error', 'Please upload a .docx file'); return; }
+      const r = new FileReader();
+      r.onload = e => {
+        loadedFile = e.target.result;
+        convertBtn.disabled = false;
+        setStatus('success', `Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+        if (!document.getElementById('cfgTitle').value) document.getElementById('cfgTitle').value = file.name.replace(/\.docx$/i, '').replace(/[_-]/g, ' ');
+      };
+      r.readAsArrayBuffer(file);
+    }
+
+    convertBtn.addEventListener('click', async () => {
+      if (!loadedFile) return;
+      convertBtn.disabled = true;
+      downloadZipBtn.style.display = 'none';
+      downloadIndivBtn.style.display = 'none';
+      resultsDiv.classList.remove('visible');
+      LOG.length = 0; setStatus('info', 'Parsing DOCX...');
+      try {
+        await convert(loadedFile);
+        convertBtn.disabled = false;
+      }
+      catch (err) {
+        setStatus('error', `Failed: ${err.message}`);
+        console.error(err);
+        convertBtn.disabled = false;
+      }
+    });
+
+    downloadZipBtn.addEventListener('click', async () => {
+      if (!generatedZip) return;
+      try {
+        const b = await generatedZip.generateAsync({ type: 'blob' });
+        saveAs(b, 'latex-project.zip');
+      } catch (e) {
+        console.error("Zip generation failed", e);
+      }
+    });
+
+    downloadIndivBtn.addEventListener('click', () => {
+      if (!currentLatex) return;
+      const texBlob = new Blob([currentLatex], { type: 'text/plain;charset=utf-8' });
+      saveAs(texBlob, "main.tex");
+      currentImages.forEach((img) => {
+        const blob = new Blob([img.data], { type: img.mime });
+        saveAs(blob, img.filename);
+      });
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', () => {
+      const text = document.getElementById('latexOut').textContent;
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        const b = document.getElementById('copyBtn');
+        b.textContent = 'Copied!';
+        setTimeout(() => b.textContent = 'Copy', 1500);
+      } catch (err) {
+        console.error('Copy failed', err);
+      }
+      document.body.removeChild(textArea);
+    });
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+      b.classList.add('active'); document.getElementById(b.dataset.tab).classList.add('active');
+    }));
+
+    function setStatus(t, m) { statusBar.className = `status-bar ${t}`; statusText.textContent = m; statusSpinner.style.display = t === 'info' ? 'block' : 'none'; }
+
+    // ================================================================
+    // MAIN CONVERSION
+    // ================================================================
+    async function convert(buf) {
+      addLog('Starting DOCX parse...');
+      const zip = await JSZip.loadAsync(buf);
+      const rels = await parseRels(zip);
+      const docStr = await zip.file('word/document.xml').async('string');
+      const docXml = new DOMParser().parseFromString(docStr, 'application/xml');
+      let styles = {};
+      if (zip.file('word/styles.xml')) {
+        const sStr = await zip.file('word/styles.xml').async('string');
+        styles = parseStyles(new DOMParser().parseFromString(sStr, 'application/xml'));
+      }
+      const rawImages = await extractImages(zip);
+      addLog(`Images from media: ${rawImages.length}`);
+      setStatus('info', 'Extracting content...');
+      const body = docXml.getElementsByTagName('w:body')[0];
+      const elements = parseBody(body, rels, styles, rawImages);
+      setStatus('info', 'Generating LaTeX...');
+      const opts = {
+        images: document.getElementById('optImages').checked,
+        tables: document.getElementById('optTables').checked,
+        text: document.getElementById('optText').checked,
+        fmt: document.getElementById('optFmt').checked,
+        stripNums: document.getElementById('optStripNums').checked,
+        codeDetect: document.getElementById('optCodeDetect').checked,
+        title: document.getElementById('cfgTitle').value || 'Comparison between Docling and AzureDocIntelligence',
+        subtitle: document.getElementById('cfgSub').value || 'Direct impact on Digitization and Authoring outputs',
+        author: document.getElementById('cfgAuthor').value || 'ZS Associates with Alexion',
+        project: document.getElementById('cfgProject').value || 'Scriptiva 2.0 - Content Authoring Tool',
+        imgW: document.getElementById('cfgImgW').value,
+        imgDir: document.getElementById('cfgImgDir').value || 'images',
+        imgPrefix: document.getElementById('cfgImgPrefix').value || 'fig',
+      };
+      let imgIndex = 1;
+      elements.forEach(el => {
+        if (el.type === 'image') {
+          const ext = el.filename.split('.').pop();
+          el.texFilename = `${opts.imgPrefix}${imgIndex}`;
+          el.finalFilename = `${opts.imgPrefix}${imgIndex}.${ext}`;
+          imgIndex++;
+        }
+      });
+      const latex = genLatex(elements, opts);
+      currentLatex = latex;
+      currentImages = [];
+      if (opts.images) {
+        elements.forEach(el => {
+          if (el.type === 'image' && el.imgData) {
+            currentImages.push({
+              filename: el.finalFilename,
+              data: el.imgData.data,
+              mime: el.imgData.mime
+            });
+          }
+        });
+      }
+      generatedZip = new JSZip();
+      generatedZip.file('main.tex', latex);
+      if (opts.images) {
+        const f = generatedZip.folder(opts.imgDir);
+        currentImages.forEach(img => f.file(img.filename, img.data));
+      }
+      updateUI(elements, currentImages, latex);
+      setStatus('success', 'Conversion complete! Preview below or download.');
+      downloadZipBtn.style.display = 'inline-flex';
+      downloadIndivBtn.style.display = 'inline-flex';
+    }
+
+    // ================================================================
+    // DOCX XML PARSERS
+    // ================================================================
+
+    async function parseRels(zip) {
+      const m = {};
+      const f = zip.file('word/_rels/document.xml.rels');
+      if (!f) return m;
+      const xml = new DOMParser().parseFromString(await f.async('string'), 'application/xml');
+      const rs = xml.getElementsByTagName('Relationship');
+      for (let i = 0; i < rs.length; i++) {
+        const r = rs[i];
+        m[r.getAttribute('Id')] = { target: r.getAttribute('Target'), type: r.getAttribute('Type') || '' };
+      }
+      return m;
+    }
+
+    function parseStyles(xml) {
+      const m = {};
+      const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const ss = xml.getElementsByTagNameNS(ns, 'style');
+      for (let i = 0; i < ss.length; i++) {
+        const s = ss[i], id = s.getAttribute('w:styleId');
+        const nEl = s.getElementsByTagNameNS(ns, 'name')[0];
+        const name = nEl ? nEl.getAttribute('w:val') : id;
+        let olvl = null;
+        const pPr = dChild(s, 'pPr', ns);
+        if (pPr) { const o = dChild(pPr, 'outlineLvl', ns); if (o) olvl = parseInt(o.getAttribute('w:val'), 10); }
+        m[id] = { name, olvl };
+      }
+      return m;
+    }
+
+    async function extractImages(zip) {
+      const imgs = [];
+      const paths = Object.keys(zip.files).filter(f => f.startsWith('word/media/'));
+      for (const p of paths) {
+        const f = zip.files[p]; if (f.dir) continue;
+        const data = await f.async('uint8array');
+        const fn = p.split('/').pop();
+        const ext = fn.split('.').pop().toLowerCase();
+        const mimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', emf: 'image/emf', wmf: 'image/wmf', svg: 'image/svg+xml', tiff: 'image/tiff' };
+        imgs.push({ path: p, filename: fn, data, mime: mimes[ext] || 'application/octet-stream', ext });
+      }
+      return imgs;
+    }
+
+    function parseBody(body, rels, styles, images) {
+      const els = [];
+      for (let i = 0; i < body.childNodes.length; i++) {
+        const n = body.childNodes[i]; if (n.nodeType !== 1) continue;
+        if (n.localName === 'p') { const e = parsePara(n, rels, styles, images); if (e) els.push(e); }
+        if (n.localName === 'tbl') { const e = parseTable(n, rels, styles); if (e) els.push(e); }
+      }
+      for (let i = 0; i < els.length - 1; i++) {
+        if (els[i].type === 'image' && els[i + 1].type === 'paragraph') {
+          const nx = els[i + 1];
+          const isCap = (nx.styleName && (nx.styleName.toLowerCase().includes('caption') || nx.styleName.toLowerCase().includes('figure')))
+            || (nx.text && /^(Figure|Fig\.|Image|Illustration)\s/i.test(nx.text.trim()));
+          if (isCap) { els[i].caption = nx.text; nx._consumed = true; }
+        }
+      }
+      return els.filter(e => !e._consumed);
+    }
+
+    function parsePara(node, rels, styles, images) {
+      const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const rNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+      if (node.getElementsByTagName('w:drawing').length || node.getElementsByTagName('w:pict').length) {
+        const img = extractImgRef(node, rels, images, rNs);
+        if (img) return img;
+      }
+      const pPr = dChild(node, 'pPr', ns);
+      let styleId = null, styleName = null, hLevel = null, numId = null, ilvl = null;
+      if (pPr) {
+        const ps = dChild(pPr, 'pStyle', ns);
+        if (ps) {
+          styleId = ps.getAttribute('w:val');
+          if (styles[styleId]) {
+            styleName = styles[styleId].name;
+            if (styles[styleId].olvl !== null) hLevel = styles[styleId].olvl;
+          }
+        }
+        const ol = dChild(pPr, 'outlineLvl', ns);
+        if (ol) hLevel = parseInt(ol.getAttribute('w:val'), 10);
+        const np = dChild(pPr, 'numPr', ns);
+        if (np) {
+          const ni = dChild(np, 'numId', ns), il = dChild(np, 'ilvl', ns);
+          if (ni) numId = ni.getAttribute('w:val');
+          if (il) ilvl = parseInt(il.getAttribute('w:val'), 10);
+        }
+      }
+      if (hLevel === null && styleName) { const m = styleName.match(/^[Hh]eading\s*(\d+)$/); if (m) hLevel = parseInt(m[1], 10) - 1; }
+      if (hLevel === null && styleId) { const m = styleId.match(/^[Hh]eading(\d+)$/); if (m) hLevel = parseInt(m[1], 10) - 1; }
+      if (styleName && /^title$/i.test(styleName.trim())) hLevel = -1;
+      if (styleName && /^subtitle$/i.test(styleName.trim())) hLevel = -2;
+      const runs = extractRuns(node, ns);
+      const text = runs.map(r => r.text).join('');
+      if (!text.trim() && hLevel === null) return null;
+      if (hLevel !== null && hLevel >= 0) return { type: 'heading', level: hLevel, text, runs, styleName, styleId };
+      if (hLevel === -1) return { type: 'title', text, runs };
+      if (hLevel === -2) return { type: 'subtitle', text, runs };
+      if (numId && numId !== '0') return { type: 'listitem', text, runs, numId, ilvl: ilvl || 0, styleName, styleId };
+      return { type: 'paragraph', text, runs, styleName, styleId };
+    }
+
+    function extractImgRef(node, rels, images, rNs) {
+      const blips = node.getElementsByTagName('a:blip');
+      for (let i = 0; i < blips.length; i++) {
+        const eid = blips[i].getAttribute('r:embed') || blips[i].getAttributeNS(rNs, 'embed');
+        if (eid && rels[eid]) {
+          const fn = rels[eid].target.split('/').pop();
+          const imgData = images.find(x => x.filename === fn);
+          let alt = '';
+          const dps = node.getElementsByTagName('wp:docPr');
+          if (dps.length) alt = dps[0].getAttribute('descr') || dps[0].getAttribute('title') || '';
+          return { type: 'image', filename: fn, embedId: eid, altText: alt, caption: '', imgData };
+        }
+      }
+      const vids = node.getElementsByTagName('v:imagedata');
+      for (let i = 0; i < vids.length; i++) {
+        const eid = vids[i].getAttribute('r:id') || vids[i].getAttributeNS(rNs, 'id');
+        if (eid && rels[eid]) {
+          const fn = rels[eid].target.split('/').pop();
+          const imgData = images.find(x => x.filename === fn);
+          return { type: 'image', filename: fn, embedId: eid, altText: vids[i].getAttribute('o:title') || '', caption: '', imgData };
+        }
+      }
+      return null;
+    }
+
+    function extractRuns(node, ns) {
+      const runs = [];
+      const rNodes = node.getElementsByTagNameNS(ns, 'r');
+      for (let i = 0; i < rNodes.length; i++) {
+        const r = rNodes[i];
+        const rPr = dChild(r, 'rPr', ns);
+        let bold = false, italic = false, underline = false, strike = false, sup = false, sub = false;
+        if (rPr) {
+          bold = !!dChild(rPr, 'b', ns);
+          italic = !!dChild(rPr, 'i', ns);
+          underline = !!dChild(rPr, 'u', ns);
+          strike = !!dChild(rPr, 'strike', ns);
+          const va = dChild(rPr, 'vertAlign', ns);
+          if (va) { const v = va.getAttribute('w:val'); sup = v === 'superscript'; sub = v === 'subscript'; }
+        }
+        let text = '';
+        for (let j = 0; j < r.childNodes.length; j++) {
+          const c = r.childNodes[j]; if (c.nodeType !== 1) continue;
+          if (c.localName === 't') text += c.textContent;
+          if (c.localName === 'tab') text += '\t';
+          if (c.localName === 'br') text += '\n';
+        }
+        if (text) runs.push({ text, bold, italic, underline, strike, sup, sub });
+      }
+      return runs;
+    }
+
+    function parseTable(tbl, rels, styles) {
+      const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const rows = [];
+      const trs = tbl.getElementsByTagNameNS(ns, 'tr');
+      for (let r = 0; r < trs.length; r++) {
+        const row = [];
+        const tcs = Array.from(trs[r].childNodes).filter(ch => ch.nodeType === 1 && ch.localName === 'tc');
+        for (const tc of tcs) {
+          const ps = tc.getElementsByTagNameNS(ns, 'p');
+          let txt = '';
+          for (let p = 0; p < ps.length; p++) {
+            const rt = extractRuns(ps[p], ns).map(x => x.text).join('');
+            if (p > 0 && rt) txt += '\n';
+            txt += rt;
+          }
+          const tcPr = dChild(tc, 'tcPr', ns);
+          let gs = 1;
+          if (tcPr) { const g = dChild(tcPr, 'gridSpan', ns); if (g) gs = parseInt(g.getAttribute('w:val'), 10) || 1; }
+          row.push({ text: txt.trim(), gs });
+        }
+        rows.push(row);
+      }
+      return rows.length ? { type: 'table', rows } : null;
+    }
+
+    function dChild(p, ln, ns) {
+      for (let i = 0; i < p.childNodes.length; i++) {
+        const c = p.childNodes[i];
+        if (c.nodeType === 1 && c.localName === ln) return c;
+      }
+      return null;
+    }
+
+    // ================================================================
+    // LATEX GENERATION
+    // ================================================================
+
+    function cleanSpaces(t) {
+      return t.replace(/\u00A0/g, ' ');
+    }
+
+    function escTex(t, inCode = false) {
+      if (!t) return '';
+      t = cleanSpaces(t);
+      if (inCode) return t;
+      t = t.replace(/\n/g, ' \\\\ ');
+      return t.replace(/\\/g, '\\textbackslash{}')
+        .replace(/([&%$#_{}])/g, '\\$1')
+        .replace(/~/g, '\\textasciitilde{}')
+        .replace(/\^/g, '\\textasciicircum{}');
+    }
+
+    function fmtRun(r, fmt) {
+      let t = escTex(r.text);
+      if (!fmt) return t;
+      if (r.bold) t = `\\textbf{${t}}`;
+      if (r.italic) t = `\\textit{${t}}`;
+      if (r.underline) t = `\\underline{${t}}`;
+      if (r.strike) t = `\\sout{${t}}`;
+      if (r.sup) t = `\\textsuperscript{${t}}`;
+      if (r.sub) t = `\\textsubscript{${t}}`;
+      return t;
+    }
+
+    function genLatex(elements, o) {
+      const L = [];
+      const P = (s) => L.push(s);
+
+      P(`% Auto-generated LaTeX from DOCX converter`);
+      P(`% Restored High-Fidelity Template`);
+      P(``);
+      P(`\\documentclass[11pt]{article}`);
+      P(``);
+      P(`% Preamble`);
+      P(`\\usepackage[margin=1in, headheight=14pt]{geometry}`);
+      P(`\\usepackage{amsfonts, amsmath, amssymb}`);
+      P(`\\usepackage{fancyhdr, float, graphicx}`);
+      P(`\\usepackage[utf8]{inputenc}`);
+      P(`\\usepackage[T1]{fontenc}`);
+      P(`\\usepackage{fouriernc}`);
+      P(`\\usepackage[nottoc, notlot, notlof]{tocbibind}`);
+      P(`\\usepackage{listings}`);
+      P(`\\usepackage{xcolor}`);
+      P(`\\usepackage{blindtext}`);
+      P(`\\usepackage{hyperref}`);
+      P(`\\usepackage{longtable}`);
+      P(`\\usepackage{booktabs}`);
+      P(`\\usepackage{array}`);
+      P(`\\usepackage{ragged2e}`);
+      if (o.fmt) P(`\\usepackage[normalem]{ulem}`);
+      P(`\\graphicspath{{${o.imgDir}/}}`);
+      P(``);
+      P(`% Allow flexible line breaking for long \\texttt identifiers`);
+      P(`\\tolerance=1000`);
+      P(`\\emergencystretch=3em`);
+      P(`\\setlength{\\tabcolsep}{4pt}`);
+      P(`\\sloppy`);
+      P(``);
+      P(`% Allow hyphenation and word breaks in table cells`);
+      P(`\\newcolumntype{P}[1]{>{\\RaggedRight\\arraybackslash\\hspace{0pt}}p{#1}}`);
+      P(`\\hypersetup{`);
+      P(`    colorlinks=true,`);
+      P(`    linkcolor=black,`);
+      P(`    filecolor=magenta,`);
+      P(`    urlcolor=cyan,`);
+      P(`    pdfpagemode=FullScreen,`);
+      P(`}`);
+      P(``);
+      P(`% Colors`);
+      P(`\\definecolor{codegreen}{rgb}{0.18,0.54,0.34}`);
+      P(`\\definecolor{codegray}{rgb}{0.45,0.45,0.45}`);
+      P(`\\definecolor{codepurple}{rgb}{0.44,0.12,0.68}`);
+      P(`\\definecolor{backcolour}{rgb}{0.97,0.97,0.95}`);
+      P(`\\definecolor{codeblue}{rgb}{0.13,0.40,0.73}`);
+      P(`\\definecolor{codeorange}{rgb}{0.80,0.36,0.02}`);
+      P(``);
+      P(`% JSON-specific colors`);
+      P(`\\definecolor{jsonkey}{rgb}{0.13,0.40,0.73}`);
+      P(`\\definecolor{jsonstring}{rgb}{0.64,0.16,0.16}`);
+      P(`\\definecolor{jsoncomment}{rgb}{0.40,0.46,0.42}`);
+      P(``);
+      P(`% Listing Styles`);
+      P(`\\lstdefinestyle{mystyle}{`);
+      P(`    backgroundcolor=\\color{backcolour},`);
+      P(`    commentstyle=\\color{codegreen}\\itshape,`);
+      P(`    keywordstyle=\\color{codeblue}\\bfseries,`);
+      P(`    numberstyle=\\scriptsize\\color{codegray},`);
+      P(`    stringstyle=\\color{codeorange},`);
+      P(`    basicstyle=\\ttfamily\\normalsize,`);
+      P(`    breakatwhitespace=false,`);
+      P(`    breaklines=true,`);
+      P(`    captionpos=b,`);
+      P(`    keepspaces=true,`);
+      P(`    numbers=left,`);
+      P(`    numbersep=5pt,`);
+      P(`    showspaces=false,`);
+      P(`    showstringspaces=false,`);
+      P(`    showtabs=false,`);
+      P(`    tabsize=2,`);
+      P(`    frame=single,`);
+      P(`    rulecolor=\\color{codegray!40},`);
+      P(`    framesep=4pt,`);
+      P(`    xleftmargin=1.5em,`);
+      P(`    framexleftmargin=1.5em,`);
+      P(`    xrightmargin=0.5em,`);
+      P(`    columns=flexible,`);
+      P(`}`);
+      P(``);
+      P(`\\lstdefinestyle{jsonstyle}{`);
+      P(`    backgroundcolor=\\color{backcolour},`);
+      P(`    commentstyle=\\itshape\\color{jsoncomment},`);
+      P(`    stringstyle=\\color{jsonstring},`);
+      P(`    basicstyle=\\ttfamily\\normalsize,`);
+      P(`    breakatwhitespace=false,`);
+      P(`    breaklines=true,`);
+      P(`    captionpos=b,`);
+      P(`    keepspaces=true,`);
+      P(`    numbers=left,`);
+      P(`    numbersep=5pt,`);
+      P(`    numberstyle=\\scriptsize\\color{codegray},`);
+      P(`    showspaces=false,`);
+      P(`    showstringspaces=false,`);
+      P(`    showtabs=false,`);
+      P(`    tabsize=2,`);
+      P(`    frame=single,`);
+      P(`    rulecolor=\\color{codegray!40},`);
+      P(`    framesep=4pt,`);
+      P(`    xleftmargin=1.5em,`);
+      P(`    framexleftmargin=1.5em,`);
+      P(`    xrightmargin=0.5em,`);
+      P(`    columns=flexible,`);
+      P(`    literate=`);
+      P(`      *{0}{{{\\color{codepurple}0}}}{1}`);
+      P(`       {1}{{{\\color{codepurple}1}}}{1}`);
+      P(`       {2}{{{\\color{codepurple}2}}}{1}`);
+      P(`       {3}{{{\\color{codepurple}3}}}{1}`);
+      P(`       {4}{{{\\color{codepurple}4}}}{1}`);
+      P(`       {5}{{{\\color{codepurple}5}}}{1}`);
+      P(`       {6}{{{\\color{codepurple}6}}}{1}`);
+      P(`       {7}{{{\\color{codepurple}7}}}{1}`);
+      P(`       {8}{{{\\color{codepurple}8}}}{1}`);
+      P(`       {9}{{{\\color{codepurple}9}}}{1}`);
+      P(`}`);
+      P(``);
+      P(`\\lstset{style=mystyle}`);
+      P(``);
+      P(`% Header and Footer`);
+      P(`\\pagestyle{fancy}`);
+      P(`\\fancyhead{}`);
+      P(`\\fancyfoot{}`);
+      P(`\\fancyhead[L]{\\textit{\\Large{${escTex(o.title)}}}}`);
+      P(`\\fancyfoot[C]{\\thepage}`);
+      P(`\\renewcommand{\\footrulewidth}{1pt}`);
+      P(``);
+      P(`\\begin{document}`);
+      P(``);
+      P(`% Title Page`);
+      P(`\\begin{titlepage}`);
+      P(`    \\centering`);
+      P(`    \\huge\\textsc{${escTex(o.author)}}\\\\`);
+      P(`    \\vspace{0.75\\baselineskip}`);
+      P(`    \\LARGE{${escTex(o.project)}}\\\\`);
+      P(`    \\vfill`);
+      P(``);
+      P(`    \\rule{\\textwidth}{1.6pt}\\vspace*{-\\baselineskip}\\vspace*{2pt}`);
+      P(`    \\rule{\\textwidth}{0.6pt}`);
+      P(`    \\vspace{0.75\\baselineskip} % Whitespace above the title`);
+      P(``);
+      P(``);
+      P(``);
+      P(`    \\huge{\\textsc{`);
+      P(`        ${escTex(o.title)}        `);
+      P(`        }} \\\\`);
+      P(``);
+      P(`    \\vspace{0.5\\baselineskip} % Whitespace below the title`);
+      P(`    \\rule{\\textwidth}{0.6pt}\\vspace*{-\\baselineskip}\\vspace*{2.8pt}`);
+      P(`    \\rule{\\textwidth}{1.6pt}`);
+      P(``);
+      P(`    \\vspace{1\\baselineskip} % Whitespace after the title block`);
+      P(``);
+      P(`    \\LARGE\\textsc{${escTex(o.subtitle)}}\\\\`);
+      P(`    \\vfill`);
+      P(`    \\today`);
+      P(`\\end{titlepage}`);
+      P(``);
+      P(`\\tableofcontents`);
+      P(`\\thispagestyle{empty}`);
+      P(`\\clearpage`);
+      P(`\\setcounter{page}{1}`);
+      P(``);
+
+      const hCmds = ['\\section', '\\subsection', '\\subsubsection', '\\paragraph', '\\subparagraph'];
+      let inList = false;
+
+      for (const el of elements) {
+        if (el.type !== 'listitem' && inList) { P(`\\end{itemize}`); inList = false; }
+
+        switch (el.type) {
+          case 'heading': {
+            const ci = Math.min(el.level, hCmds.length - 1);
+            let ht = el.runs ? el.runs.map(r => fmtRun(r, o.fmt)).join('') : escTex(el.text);
+            if (o.stripNums) {
+              ht = ht.replace(/^\\?(\d+\.?)+\s+/, '');
+            }
+            P(`${hCmds[ci]}{${ht}}`);
+            break;
+          }
+          case 'paragraph': {
+            if (!o.text || !el.text.trim()) break;
+            const trimmed = el.text.trim();
+            const isJson = o.codeDetect && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']')));
+
+            if (isJson) {
+              P(`\\begin{lstlisting}[style=jsonstyle]`);
+              P(cleanSpaces(el.text));
+              P(`\\end{lstlisting}`);
+            } else {
+              P(el.runs ? el.runs.map(r => fmtRun(r, o.fmt)).join('') : escTex(el.text));
+            }
+            P(``);
+            break;
+          }
+          case 'listitem': {
+            if (!o.text) break;
+            if (!inList) { P(`\\begin{itemize}`); inList = true; }
+            P(`  \\item ${el.runs ? el.runs.map(r => fmtRun(r, o.fmt)).join('') : escTex(el.text)}`);
+            break;
+          }
+          case 'image': {
+            if (!o.images) break;
+            const fb = el.texFilename;
+            const cap = el.caption ? escTex(el.caption) : (el.altText ? escTex(el.altText) : `Image ${fb}`);
+            P(`\\begin{figure}[H]`);
+            P(`  \\centering`);
+            P(`  \\includegraphics[width=${o.imgW}\\textwidth]{${fb}}`);
+            P(`  \\caption{${cap}}`);
+            P(`  \\label{fig:${fb}}`);
+            P(`\\end{figure}`);
+            break;
+          }
+          case 'table': {
+            if (!o.tables) break;
+            const nc = el.rows[0] ? el.rows[0].reduce((s, c) => s + c.gs, 0) : 0;
+            if (!nc) break;
+            const cs = Array(nc).fill('l').join(' | ');
+            P(`\\begin{longtable}{| ${cs} |}`);
+            P(`\\hline`);
+            for (let r = 0; r < el.rows.length; r++) {
+              const cells = el.rows[r].map(c => {
+                const ct = escTex(c.text);
+                return c.gs > 1 ? `\\multicolumn{${c.gs}}{|l|}{${ct}}` : ct;
+              });
+              P(cells.join(' & ') + ' \\\\');
+              P(`\\hline`);
+            }
+            P(`\\end{longtable}`);
+            break;
+          }
+        }
+      }
+      if (inList) P(`\\end{itemize}`);
+      P(`\\end{document}`);
+      return L.join('\n');
+    }
+
+    function updateUI(elements, currentImages, latex) {
+      document.getElementById('sH').textContent = elements.filter(e => e.type === 'heading').length;
+      document.getElementById('sI').textContent = currentImages.length;
+      document.getElementById('sT').textContent = elements.filter(e => e.type === 'table').length;
+      document.getElementById('sP').textContent = elements.filter(e => e.type === 'paragraph').length;
+      document.getElementById('latexOut').textContent = latex;
+      const tree = document.getElementById('tocTree'); tree.innerHTML = '';
+      elements.filter(e => e.type === 'heading').forEach(h => {
+        const d = document.createElement('div');
+        d.className = `toc-entry level-${Math.min(h.level, 3)}`;
+        d.innerHTML = `<span>${escHtml(h.text)}</span>`;
+        tree.appendChild(d);
+      });
+      const grid = document.getElementById('imgGrid'); grid.innerHTML = '';
+      elements.filter(e => e.type === 'image').forEach(img => {
+        const card = document.createElement('div'); card.className = 'image-card';
+        let src = '';
+        if (img.imgData) { src = URL.createObjectURL(new Blob([img.imgData.data], { type: img.imgData.mime })); }
+        card.innerHTML = `${src ? `<img src="${src}" alt="${escHtml(img.finalFilename)}"/>` : ''}
+      <div class="image-info">${escHtml(img.finalFilename)}</div>`;
+        grid.appendChild(card);
+      });
+      document.getElementById('logOut').textContent = LOG.join('\n');
+      resultsDiv.classList.add('visible');
+    }
+
+    function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  </script>
+</body>
+
+</html>
